@@ -43,7 +43,8 @@ jobs:
       - name: 上传文件到 Windows 服务器
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.WIN_IP }}:22
+          host: ${{ secrets.WIN_IP }}  # 仅填写 IP（如 112.29.65.243，不含端口）
+          port: 22  # 单独指定端口
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           source: "./gaojian-ruancang/*"
