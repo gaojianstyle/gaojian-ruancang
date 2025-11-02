@@ -36,10 +36,10 @@ jobs:
             # 创建目录（CMD 语法）
             if not exist "d:/codes" mkdir "d:/codes"
             cd /d "d:/codes"
-            
+            dir
             # 拉取或克隆仓库（CMD 语法，一行完成判断）
-            if exist "gaojian-ruancang" (cd "gaojian-ruancang" && git pull origin main) else (git clone https://gaojianstyle:${{ secrets.GITHUB_PAT }}@github.com/gaojianstyle/gaojian-ruancang.git)
+            if exist "gaojian-ruancang" (cd "gaojian-ruancang" && git pull origin main) else (git clone https://github.com/gaojianstyle/gaojian-ruancang.git)
             
             # 验证结果
-            echo 仓库拉取完成，目录结构：
+            echo OK：
             dir "gaojian-ruancang"
