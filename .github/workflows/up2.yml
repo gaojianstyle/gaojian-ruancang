@@ -32,6 +32,7 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           debug: true
+          request_pty: true  # 强制输出完整命令执行日志
           script: |
             rem 创建目标目录（d:/.codes，注意开头的点）
             if not exist "d:/.codes" mkdir "d:/.codes"
