@@ -25,7 +25,7 @@ jobs:
           fi
 
       - name: 登录 Windows 服务器并拉取仓库
-        uses: appleboy/ssh-action@v1.0.3  # 使用 SSH 动作执行命令
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.WIN_IP }}
           port: 22
@@ -33,18 +33,13 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           debug: true
           script: |
-            # 进入目标目录，不存在则创建
+            # 创建目录（CMD 语法）
             if not exist "d:/codes" mkdir "d:/codes"
-            cd "d:/codes"
+            cd /d "d:/codes"
             
-            # 若仓库已存在则拉取更新，不存在则克隆
-            if exist "gaojian-ruancang" (
-              cd "gaojian-ruancang"
-              git pull origin main
-            ) else (
-              git clone https://gaojianstyle:${{ secrets.GITHUB_PAT }}@github.com/gaojianstyle/gaojian-ruancang.git
-            )
+            # 拉取或克隆仓库（CMD 语法，一行完成判断）
+            if exist "gaojian-ruancang" (cd "gaojian-ruancang" && git pull origin main) else (git clone https://gaojianstyle:${{ secrets.GITHUB_PAT }}@github.com/gaojianstyle/gaojian-ruancang.git)
             
-            # 验证拉取结果
-            echo "仓库拉取完成，目录结构："
+            # 验证结果
+            echo 仓库拉取完成，目录结构：
             dir "gaojian-ruancang"
