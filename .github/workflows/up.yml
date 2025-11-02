@@ -2,12 +2,11 @@ name: 拉取目标仓库并部署到 Windows 服务器
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # 允许手动手动触发
+  workflow_dispatch:
 
 jobs:
   pull-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # 限制任务超时时间，避免无限等待
     steps:
       - name: 拉取目标仓库（gaojian-ruancang）
         uses: actions/checkout@v4
@@ -15,28 +14,41 @@ jobs:
           repository: gaojianstyle/gaojian-ruancang
           ref: main
           path: ./gaojian-ruancang
-          fetch-depth: 0  # 拉取完整历史，避免部分文件缺失
+          fetch-depth: 0
+
+      - name: 安装 tree 和 netcat 工具
+        run: |
+          sudo apt-get install -y tree
+          sudo apt-get install -y netcat  # 安装 nc 工具用于端口测试
 
       - name: 验证仓库拉取结果
         run: |
-          echo "当前目录结构："
-          tree ./gaojian-ruancang  # 更直观地展示目录结构（需安装tree）
+          echo "目录结构："
+          tree ./gaojian-ruancang
           echo "文件总数：$(find ./gaojian-ruancang -type f | wc -l)"
-        continue-on-error: true  # 即使验证失败也继续执行（方便排查）
+        continue-on-error: true
 
-      - name: 安装 tree 工具（用于目录展示）
-        run: sudo apt-get install -y tree
+      - name: 测试与 Windows 服务器的连接（22端口）
+        run: |
+          # 提取服务器 IP 和端口（从 secrets.WIN_IP:22 中拆分）
+          HOST_PORT="${{ secrets.WIN_IP }}:22"
+          IP=$(echo "$HOST_PORT" | cut -d: -f1)
+          PORT=$(echo "$HOST_PORT" | cut -d: -f2)
+          echo "测试连接：$IP:$PORT"
+          # 使用 nc 测试端口连通性（超时时间 10 秒）
+          if nc -z -v -w 10 "$IP" "$PORT"; then
+            echo "✅ 服务器 $IP:$PORT 连接成功"
+          else
+            echo "❌ 服务器 $IP:$PORT 连接失败"
+            exit 1  # 连接失败则终止工作流
+          fi
 
       - name: 上传文件到 Windows 服务器
-        uses: appleboy/scp-action@v0.1.7  # 使用固定版本，避免自动升级导致兼容问题
+        uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: ${{ secrets.WIN_IP }}:22
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22  # Windows 通常默认 SSH 端口为 22，若修改需同步更新
           source: "./gaojian-ruancang/*"
-          target: "d:/codes/gaojian-ruancang"  # Windows 路径使用 / 更兼容 SCP
-          strip_components: 1  # 移除源路径的第一层目录（避免多一层 gaojian-ruancang）
-          timeout: 30s  # 超时时间设置（根据文件大小调整）
-          command_timeout: 60s  # 命令执行超时
-          debug: true  # 开启调试模式，输出详细日志
+          target: "d:/codes/gaojian-ruancang"
+          debug: true
