@@ -1,0 +1,32 @@
+name: 拉取目标仓库并执行操作
+on:
+  push:
+    branches: [ main ]  # 触发条件：当前仓库的 main 分支有推送时执行
+  # 也可以添加手动触发：
+  workflow_dispatch:
+
+jobs:
+  pull-and-deploy:
+    runs-on: ubuntu-latest  # 在 Ubuntu 运行器上执行
+    steps:
+      - name: 拉取目标仓库（gaojian-ruancang）
+        uses: actions/checkout@v4
+        with:
+          repository: gaojianstyle/gaojian-ruancang  # 目标仓库的「用户名/仓库名」
+          ref: main  # 拉取的分支（默认 main，可根据实际分支修改）
+          path: ./gaojian-ruancang  # 拉取到运行器的本地路径（如 ./gaojian-ruancang）
+
+      - name: 验证仓库是否拉取成功
+        run: |
+          echo "查看拉取的仓库目录："
+          ls -la ./gaojian-ruancang  # 列出仓库文件（Linux 命令）
+
+      # （可选）将拉取的仓库文件传输到你的 Windows 服务器
+      - name: 上传仓库文件到 Windows 服务器
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: "./gaojian-ruancang/*"  # 运行器中仓库的路径
+          target: "d:/.codes/gaojian-ruancang"  # Windows 服务器上的目标路径（需替换）
