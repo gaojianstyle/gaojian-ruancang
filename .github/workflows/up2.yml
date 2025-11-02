@@ -16,10 +16,8 @@ jobs:
           path: ./gaojian-ruancang
           fetch-depth: 0
 
-      - name: 安装 tree 和 netcat 工具
-        run: |
-          sudo apt-get install -y tree
-          sudo apt-get install -y netcat  # 安装 nc 工具用于端口测试
+      - name: 安装 tree 工具
+        run: sudo apt-get install -y tree
 
       - name: 验证仓库拉取结果
         run: |
@@ -30,17 +28,16 @@ jobs:
 
       - name: 测试与 Windows 服务器的连接（22端口）
         run: |
-          # 提取服务器 IP 和端口（从 secrets.WIN_IP:22 中拆分）
           HOST_PORT="${{ secrets.WIN_IP }}:22"
           IP=$(echo "$HOST_PORT" | cut -d: -f1)
           PORT=$(echo "$HOST_PORT" | cut -d: -f2)
           echo "测试连接：$IP:$PORT"
-          # 使用 nc 测试端口连通性（超时时间 10 秒）
-          if nc -z -v -w 10 "$IP" "$PORT"; then
+          # 使用 ssh-keyscan 测试 SSH 端口连通性
+          if ssh-keyscan -p $PORT $IP > /dev/null 2>&1; then
             echo "✅ 服务器 $IP:$PORT 连接成功"
           else
             echo "❌ 服务器 $IP:$PORT 连接失败"
-            exit 1  # 连接失败则终止工作流
+            exit 1
           fi
 
       - name: 上传文件到 Windows 服务器
