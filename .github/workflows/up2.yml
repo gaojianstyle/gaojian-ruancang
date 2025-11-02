@@ -32,20 +32,31 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           debug: true
-          request_pty: true  # 强制输出完整命令执行日志
+          request_pty: true  # 强制输出完整日志
           script: |
-            rem 创建目标目录（d:/.codes，注意开头的点）
-            if not exist "d:/.codes" mkdir "d:/.codes"
-            rem 切换到目标目录（/d 参数确保跨盘符切换）
-            cd /d "d:/.codes"
-            rem 查看当前目录内容（验证是否切换成功）
-            dir
-            rem 拉取或克隆仓库到当前目录
-            if exist "gaojian-ruancang" (
-              cd "gaojian-ruancang" && git pull origin main
+            rem 1. 创建并验证目标目录
+            if not exist "d:/.codes" (
+              mkdir "d:/.codes" && echo ✅ 目录 d:/.codes 创建成功
             ) else (
-              git clone https://github.com/gaojianstyle/gaojian-ruancang.git
+              echo ℹ️  目录 d:/.codes 已存在
             )
-            rem 验证拉取结果
-            echo 仓库拉取完成，目录结构：
+            
+            rem 2. 切换目录并验证
+            cd /d "d:/.codes" || (echo ❌ 目录切换失败 && exit 1)
+            echo ℹ️ 当前工作目录：%cd%
+            echo ------------ 目录 d:/.codes 内容 ------------
+            dir
+            
+            rem 3. 拉取/更新仓库（支持私有仓库）
+            if exist "gaojian-ruancang" (
+              echo ℹ️  仓库已存在，执行更新...
+              cd "gaojian-ruancang" && git pull origin main || (echo ❌ git pull 失败 && exit 1)
+            ) else (
+              echo ℹ️  仓库不存在，执行克隆...
+              git clone https://gaojianstyle:${{ secrets.GITHUB_PAT }}@github.com/gaojianstyle/gaojian-ruancang.git || (echo ❌ git clone 失败 && exit 1)
+            )
+            
+            rem 4. 验证拉取结果
+            echo ------------ 仓库拉取完成，目录结构 ------------
             dir "gaojian-ruancang"
+            echo ✅ 部署流程执行完成！
