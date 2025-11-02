@@ -33,12 +33,18 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           debug: true
           script: |
-            rem 创建目录（CMD 语法，rem 表示注释）
-            if not exist "d:/codes" mkdir "d:/codes"
-            cd /d "d:/codes"
+            rem 创建目标目录（d:/.codes，注意开头的点）
+            if not exist "d:/.codes" mkdir "d:/.codes"
+            rem 切换到目标目录（/d 参数确保跨盘符切换）
+            cd /d "d:/.codes"
+            rem 查看当前目录内容（验证是否切换成功）
             dir
-            rem 拉取或克隆仓库（无认证，仅公开仓库可用）
-            if exist "gaojian-ruancang" (cd "gaojian-ruancang" && git pull origin main) else (git clone https://github.com/gaojianstyle/gaojian-ruancang.git)
-            rem 验证结果
-            echo OK：
+            rem 拉取或克隆仓库到当前目录
+            if exist "gaojian-ruancang" (
+              cd "gaojian-ruancang" && git pull origin main
+            ) else (
+              git clone https://github.com/gaojianstyle/gaojian-ruancang.git
+            )
+            rem 验证拉取结果
+            echo 仓库拉取完成，目录结构：
             dir "gaojian-ruancang"
