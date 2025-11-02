@@ -8,23 +8,8 @@ jobs:
   pull-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取目标仓库（gaojian-ruancang）
-        uses: actions/checkout@v4
-        with:
-          repository: gaojianstyle/gaojian-ruancang
-          ref: main
-          path: ./gaojian-ruancang
-          fetch-depth: 0
-
       - name: 安装 tree 工具
         run: sudo apt-get install -y tree
-
-      - name: 验证仓库拉取结果
-        run: |
-          echo "目录结构："
-          tree ./gaojian-ruancang
-          echo "文件总数：$(find ./gaojian-ruancang -type f | wc -l)"
-        continue-on-error: true
 
       - name: 测试与 Windows 服务器的连接（22端口）
         run: |
@@ -32,7 +17,6 @@ jobs:
           IP=$(echo "$HOST_PORT" | cut -d: -f1)
           PORT=$(echo "$HOST_PORT" | cut -d: -f2)
           echo "测试连接：$IP:$PORT"
-          # 使用 ssh-keyscan 测试 SSH 端口连通性
           if ssh-keyscan -p $PORT $IP > /dev/null 2>&1; then
             echo "✅ 服务器 $IP:$PORT 连接成功"
           else
@@ -40,13 +24,27 @@ jobs:
             exit 1
           fi
 
-      - name: 上传文件到 Windows 服务器
-        uses: appleboy/scp-action@v0.1.7
+      - name: 登录 Windows 服务器并拉取仓库
+        uses: appleboy/ssh-action@v1.0.3  # 使用 SSH 动作执行命令
         with:
-          host: ${{ secrets.WIN_IP }}  # 仅填写 IP（如 112.29.65.243，不含端口）
-          port: 22  # 单独指定端口
+          host: ${{ secrets.WIN_IP }}
+          port: 22
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          source: "./gaojian-ruancang/*"
-          target: "d:/codes/gaojian-ruancang"
           debug: true
+          script: |
+            # 进入目标目录，不存在则创建
+            if not exist "d:/codes" mkdir "d:/codes"
+            cd "d:/codes"
+            
+            # 若仓库已存在则拉取更新，不存在则克隆
+            if exist "gaojian-ruancang" (
+              cd "gaojian-ruancang"
+              git pull origin main
+            ) else (
+              git clone https://gaojianstyle:${{ secrets.GITHUB_PAT }}@github.com/gaojianstyle/gaojian-ruancang.git
+            )
+            
+            # 验证拉取结果
+            echo "仓库拉取完成，目录结构："
+            dir "gaojian-ruancang"
