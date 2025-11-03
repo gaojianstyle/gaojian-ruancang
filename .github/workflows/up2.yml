@@ -34,30 +34,36 @@ jobs:
           debug: true
           request_pty: true  # 强制输出完整日志
           script: |
-            rem 1. 创建并验证目标目录
+            rem 显示当前执行的步骤（方便定位）
+            echo "====== 开始执行步骤 1：创建目录 ======"
             if not exist "d:/.codes" (
-              mkdir "d:/.codes" && echo ✅ 目录 d:/.codes 创建成功
+              mkdir "d:/.codes" && echo ✅ 目录 d:/.codes 创建成功 || echo ❌ 目录创建失败 && exit 1
             ) else (
               echo ℹ️  目录 d:/.codes 已存在
             )
             
-            rem 2. 切换目录并验证
-            cd /d "d:/.codes" || (echo ❌ 目录切换失败 && exit 1)
+            echo "====== 开始执行步骤 2：切换目录 ======"
+            cd /d "d:/.codes" || (echo ❌ 目录切换失败，当前路径：%cd% && exit 1)
             echo ℹ️ 当前工作目录：%cd%
             echo ------------ 目录 d:/.codes 内容 ------------
-            echo. > 文件名.txt
-            dir
+            dir  # 列出所有内容，确认文件是否创建成功
+            echo. > test.txt  # 测试文件创建，替换原来的“文件名.txt”（避免中文可能的问题）
+            if exist "test.txt" (echo ✅ 测试文件创建成功) else (echo ❌ 测试文件创建失败 && exit 1)
             
-            rem 3. 拉取/更新仓库（支持私有仓库）
+            echo "====== 开始执行步骤 3：拉取仓库 ======"
             if exist "gaojian-ruancang" (
               echo ℹ️  仓库已存在，执行更新...
-              cd "gaojian-ruancang" && git pull origin main || (echo ❌ git pull 失败 && exit 1)
+              cd "gaojian-ruancang" && (git status || echo ❌ git status 失败) && git pull origin main || (echo ❌ git pull 失败，错误码：%errorlevel% && exit 1)
             ) else (
               echo ℹ️  仓库不存在，执行克隆...
-              git clone https://gaojianstyle:${{ secrets.GITHUB_PAT }}@github.com/gaojianstyle/gaojian-ruancang.git || (echo ❌ git clone 失败 && exit 1)
+              git clone https://gaojianstyle:${{ secrets.GITHUB_PAT }}@github.com/gaojianstyle/gaojian-ruancang.git || (echo ❌ git clone 失败，错误码：%errorlevel% && exit 1)
             )
             
-            rem 4. 验证拉取结果
-            echo ------------ 仓库拉取完成，目录结构 ------------
-            dir "gaojian-ruancang"
+            echo "====== 开始执行步骤 4：验证结果 ======"
+            if exist "gaojian-ruancang" (
+              echo ------------ 仓库目录结构 ------------
+              dir "gaojian-ruancang"
+            ) else (
+              echo ❌ 仓库目录不存在，拉取失败 && exit 1
+            )
             echo ✅ 部署流程执行完成！
