@@ -1,6 +1,8 @@
 name: 测试 Windows 服务器 D 盘文件操作连通性
 on:
-  workflow_dispatch:  # 仅允许手动触发，避免自动执行
+  push:
+    branches: [ main ]  # 保留 push 触发
+  workflow_dispatch:    # 保留手动触发
 
 jobs:
   test-drive-connectivity:
