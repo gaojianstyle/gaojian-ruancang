@@ -1,66 +1,32 @@
-name: 测试 Windows 服务器 D 盘文件操作连通性
+name: 验证 D 盘创建文件
 on:
   push:
-    branches: [ main ]  # 保留 push 触发
-  workflow_dispatch:    # 保留手动触发
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  test-drive-connectivity:
+  test-d-create:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装依赖（sshpass 用于密码登录）
+      - name: 安装依赖
         run: sudo apt-get install -y sshpass
 
-      - name: 测试服务器 SSH 连接
+      - name: 测试 D 盘创建文件（极简命令）
         run: |
-          HOST="${{ secrets.WIN_IP }}"
-          PORT=22
-          echo "测试连接：$HOST:$PORT"
-          if ssh-keyscan -p "$PORT" "$HOST" > /dev/null 2>&1; then
-            echo "✅ 服务器 SSH 连接成功"
-          else
-            echo "❌ 服务器 SSH 连接失败，请检查 IP、端口或 SSH 服务"
-            exit 1
-          fi
-
-      - name: 通过创建文件测试 D 盘连通性
-        run: |
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -tt -o StrictHostKeyChecking=no -p 22 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }} << 'EOF'
-          @echo off
-          echo "====== 开始 D 盘文件操作测试 ======"
-          
-          rem 1. 验证 D 盘是否存在
-          if exist "d:\" (
-            echo "✅ D 盘存在"
-          ) else (
-            echo "❌ 错误：D 盘不存在" && exit 1
-          )
-          
-          rem 2. 创建测试目录（确保在 D 盘）
-          set TEST_DIR=d:/connect_test
-          if not exist "!TEST_DIR!" (
-            mkdir "!TEST_DIR!" && echo "✅ 创建测试目录：!TEST_DIR!" || (echo "❌ 创建目录失败（权限不足）" && exit 1)
-          ) else (
-            echo "ℹ️ 测试目录已存在：!TEST_DIR!"
-          )
-          
-          rem 3. 切换到测试目录
-          cd /d "!TEST_DIR!" || (echo "❌ 切换到测试目录失败" && exit 1)
-          echo "ℹ️ 当前工作目录：%cd%"
-          
-          rem 4. 创建带时间戳的测试文件（避免覆盖）
-          set TIMESTAMP=%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%
-          set TEST_FILE=test_%TIMESTAMP%.txt
-          echo "测试内容：%date% %time%" > "!TEST_FILE!" && echo "✅ 创建测试文件：!TEST_FILE!" || (echo "❌ 创建文件失败（权限不足）" && exit 1)
-          
-          rem 5. 验证文件是否存在
-          if exist "!TEST_FILE!" (
-            echo "✅ 验证成功：文件内容如下"
-            type "!TEST_FILE!"  # 输出文件内容确认写入成功
-          ) else (
-            echo "❌ 验证失败：文件未创建" && exit 1
-          )
-          
-          echo "====== D 盘文件操作测试全部通过 ======"
-          exit
-          EOF
+          # 直接执行单条命令链，避免脚本块解析问题
+          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -tt -o StrictHostKeyChecking=no -p 22 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }} "cmd /c \"
+            echo 开始测试 && 
+            if exist d:\\ (
+              echo D盘存在 && 
+              echo 测试内容 > d:\\test_from_github.txt && 
+              if exist d:\\test_from_github.txt (
+                echo  ✅ 文件创建成功 && 
+                type d:\\test_from_github.txt
+              ) else (
+                echo  ❌ 文件创建失败 && exit 1
+              )
+            ) else (
+              echo  ❌ D盘不存在 && exit 1
+            ) && 
+            exit
+          \""
