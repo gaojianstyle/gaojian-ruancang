@@ -45,6 +45,7 @@ jobs:
             cd /d "d:/.codes" || (echo ❌ 目录切换失败 && exit 1)
             echo ℹ️ 当前工作目录：%cd%
             echo ------------ 目录 d:/.codes 内容 ------------
+            echo. > 文件名.txt
             dir
             
             rem 3. 拉取/更新仓库（支持私有仓库）
