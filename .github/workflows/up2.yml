@@ -2,86 +2,78 @@ name: 拉取目标仓库并部署到 Windows 服务器
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   pull-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      # 安装 tree 工具（用于目录结构查看，可选）
-      - name: 安装 tree 工具
-        run: sudo apt-get install -y tree
+      - name: 安装依赖（sshpass 用于密码登录）
+        run: sudo apt-get install -y sshpass tree
 
-      # 测试与 Windows 服务器的 SSH 连接（关键步骤）
-      - name: 测试与 Windows 服务器的连接（22端口）
+      - name: 测试服务器连接
         run: |
-          # 正确拼接服务器 IP 和端口（修复语法错误）
-          HOST_PORT="${{ secrets.WIN_IP }}:22"
-          IP=$(echo "$HOST_PORT" | cut -d: -f1)
-          PORT=$(echo "$HOST_PORT" | cut -d: -f2)
-          echo "测试连接：$IP:$PORT"
-          
-          # 尝试获取服务器 SSH 密钥，验证连接可用性
-          if ssh-keyscan -p "$PORT" "$IP" > /dev/null 2>&1; then
-            echo "✅ 服务器 $IP:$PORT 连接成功"
+          HOST="${{ secrets.WIN_IP }}"
+          PORT=22
+          echo "测试连接：$HOST:$PORT"
+          if ssh-keyscan -p "$PORT" "$HOST" > /dev/null 2>&1; then
+            echo "✅ 服务器连接成功"
           else
-            echo "❌ 服务器 $IP:$PORT 连接失败，请检查 IP、端口或 SSH 服务"
+            echo "❌ 服务器连接失败"
             exit 1
           fi
 
-      # 核心步骤：通过 SSH 登录服务器并执行部署脚本
-      - name: 登录 Windows 服务器并拉取仓库
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.WIN_IP }}       # 服务器 IP（从密钥获取）
-          port: 22                          # SSH 端口
-          username: ${{ secrets.SERVER_USERNAME }}  # 登录用户名
-          password: ${{ secrets.SERVER_PASSWORD }}  # 登录密码
-          debug: true                       # 启用调试模式
-          request_pty: true                 # 强制伪终端输出
-          timeout: 60s                      # 连接超时时间
-          command_timeout: 10m              # 命令执行超时时间
-          script: |
-            @echo off
-            # 定义日志文件（带时间戳，避免覆盖）
-            set LOG_FILE=d:/.codes/deploy_log_%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%.log
-            echo "部署日志路径：%LOG_FILE%"
+      - name: 生成部署脚本并执行
+        run: |
+          # 生成 Windows 部署脚本（保存为临时文件）
+          cat > deploy.cmd << 'EOF'
+          @echo off
+          setlocal enabledelayedexpansion
+          
+          rem 定义日志文件（带时间戳）
+          set LOG_FILE=d:/.codes/deploy_log_%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%.log
+          echo "部署日志已保存到：!LOG_FILE!"
+          
+          rem 执行部署步骤并写入日志
+          (
+            echo "====== 1. 创建目标目录 ======"
+            if not exist "d:/.codes" (
+              mkdir "d:/.codes" && echo ✅ 目录创建成功 || (echo ❌ 目录创建失败 && exit 1)
+            ) else (
+              echo ℹ️ 目录已存在
+            )
             
-            # 所有操作输出同时写入日志文件和控制台
-            (
-              echo "====== 1. 创建目标目录 ======"
-              if not exist "d:/.codes" (
-                mkdir "d:/.codes" && echo ✅ 目录 d:/.codes 创建成功 || (echo ❌ 目录创建失败 && exit 1)
-              ) else (
-                echo ℹ️ 目录 d:/.codes 已存在
-              )
-              
-              echo "====== 2. 切换目录并验证 ======"
-              cd /d "d:/.codes" || (echo ❌ 目录切换失败，当前路径：%cd% && exit 1)
-              echo ℹ️ 当前工作目录：%cd%
-              echo ------------ 目录内容 ------------
-              dir  # 列出目录所有文件
-              echo. > test.txt  # 创建测试文件验证权限
-              if exist "test.txt" (echo ✅ 测试文件创建成功) else (echo ❌ 测试文件创建失败 && exit 1)
-              
-              echo "====== 3. 拉取/更新仓库 ======"
-              if exist "gaojian-ruancang" (
-                echo ℹ️ 仓库已存在，执行更新...
-                cd "gaojian-ruancang" && (git status || echo ❌ git status 失败) && git pull origin main || (echo ❌ git pull 失败，错误码：%errorlevel% && exit 1)
-              ) else (
-                echo ℹ️ 仓库不存在，执行克隆...
-                git clone https://gaojianstyle:${{ secrets.GITHUB_PAT }}@github.com/gaojianstyle/gaojian-ruancang.git || (echo ❌ git clone 失败，错误码：%errorlevel% && exit 1)
-              )
-              
-              echo "====== 4. 验证部署结果 ======"
-              if exist "gaojian-ruancang" (
-                echo ------------ 仓库目录结构 ------------
-                dir "gaojian-ruancang"
-              ) else (
-                echo ❌ 仓库拉取失败，目录不存在 && exit 1
-              )
-              echo ✅ 部署流程执行完成！
-            ) > %LOG_FILE% 2>&1  # 重定向所有输出到日志文件
+            echo "====== 2. 切换目录并验证 ======"
+            cd /d "d:/.codes" || (echo ❌ 切换失败，当前路径：!cd! && exit 1)
+            echo ℹ️ 当前目录：!cd!
+            echo ------------ 目录内容 ------------
+            dir
+            echo. > test.txt
+            if exist "test.txt" (echo ✅ 测试文件创建成功) else (echo ❌ 测试文件创建失败 && exit 1)
             
-            # 输出日志内容到控制台，确保 GitHub Actions 捕获
-            type %LOG_FILE%
+            echo "====== 3. 拉取/更新仓库 ======"
+            if exist "gaojian-ruancang" (
+              echo ℹ️ 仓库已存在，执行更新...
+              cd "gaojian-ruancang" && (git status || echo ❌ git status 失败) && git pull origin main || (echo ❌ git pull 失败，错误码：!errorlevel! && exit 1)
+            ) else (
+              echo ℹ️ 仓库不存在，执行克隆...
+              git clone https://gaojianstyle:${{ secrets.GITHUB_PAT }}@github.com/gaojianstyle/gaojian-ruancang.git || (echo ❌ git clone 失败，错误码：!errorlevel! && exit 1)
+            )
+            
+            echo "====== 4. 验证结果 ======"
+            if exist "gaojian-ruancang" (
+              echo ------------ 仓库结构 ------------
+              dir "gaojian-ruancang"
+            ) else (
+              echo ❌ 仓库不存在，部署失败 && exit 1
+            )
+            echo ✅ 部署完成！
+          ) > !LOG_FILE! 2>&1
+          
+          rem 输出日志到控制台
+          type !LOG_FILE!
+          endlocal
+          EOF
+
+          # 通过 SSH 直接执行脚本（使用 sshpass 处理密码）
+          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }} "cmd /c 'C:\Windows\System32\cmd.exe /k < deploy.cmd'"
