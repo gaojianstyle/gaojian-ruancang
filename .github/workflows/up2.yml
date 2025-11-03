@@ -1,56 +1,64 @@
-name: 拉取目标仓库并部署到 Windows 服务器
+name: 测试 Windows 服务器 D 盘文件操作连通性
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:  # 仅允许手动触发，避免自动执行
 
 jobs:
-  pull-and-deploy:
+  test-drive-connectivity:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装依赖
-        run: sudo apt-get install -y sshpass tree
+      - name: 安装依赖（sshpass 用于密码登录）
+        run: sudo apt-get install -y sshpass
 
-      - name: 测试服务器连接
+      - name: 测试服务器 SSH 连接
         run: |
           HOST="${{ secrets.WIN_IP }}"
           PORT=22
           echo "测试连接：$HOST:$PORT"
           if ssh-keyscan -p "$PORT" "$HOST" > /dev/null 2>&1; then
-            echo "✅ 服务器连接成功"
+            echo "✅ 服务器 SSH 连接成功"
           else
-            echo "❌ 服务器连接失败"
+            echo "❌ 服务器 SSH 连接失败，请检查 IP、端口或 SSH 服务"
             exit 1
           fi
 
-      - name: 执行基础部署命令（强制使用 D 盘）
+      - name: 通过创建文件测试 D 盘连通性
         run: |
           sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -tt -o StrictHostKeyChecking=no -p 22 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }} << 'EOF'
           @echo off
-          echo "====== 开始执行基础命令（强制使用 D 盘）======"
+          echo "====== 开始 D 盘文件操作测试 ======"
           
           rem 1. 验证 D 盘是否存在
           if exist "d:\" (
             echo "✅ D 盘存在"
           ) else (
-            echo "❌ 错误：D 盘不存在，请检查服务器磁盘配置" && exit 1
+            echo "❌ 错误：D 盘不存在" && exit 1
           )
           
-          rem 2. 创建 D 盘目标目录
-          if not exist "d:/codes" (
-            mkdir "d:/codes" && echo "✅ 创建 d:/codes 成功" || (echo "❌ 创建 d:/codes 失败（可能权限不足）" && exit 1)
+          rem 2. 创建测试目录（确保在 D 盘）
+          set TEST_DIR=d:/connect_test
+          if not exist "!TEST_DIR!" (
+            mkdir "!TEST_DIR!" && echo "✅ 创建测试目录：!TEST_DIR!" || (echo "❌ 创建目录失败（权限不足）" && exit 1)
           ) else (
-            echo "ℹ️ d:/codes 目录已存在"
+            echo "ℹ️ 测试目录已存在：!TEST_DIR!"
           )
           
-          rem 3. 切换到 D 盘目标目录
-          cd /d "d:/codes" && echo "✅ 切换到 d:/codes，当前目录：%cd%" || (echo "❌ 切换到 d:/codes 失败" && exit 1)
+          rem 3. 切换到测试目录
+          cd /d "!TEST_DIR!" || (echo "❌ 切换到测试目录失败" && exit 1)
+          echo "ℹ️ 当前工作目录：%cd%"
           
-          rem 4. 验证 D 盘文件操作权限
-          echo. > test.txt && echo "✅ 在 d:/codes 创建 test.txt 成功" || (echo "❌ 在 d:/codes 创建文件失败（权限不足）" && exit 1)
+          rem 4. 创建带时间戳的测试文件（避免覆盖）
+          set TIMESTAMP=%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%
+          set TEST_FILE=test_%TIMESTAMP%.txt
+          echo "测试内容：%date% %time%" > "!TEST_FILE!" && echo "✅ 创建测试文件：!TEST_FILE!" || (echo "❌ 创建文件失败（权限不足）" && exit 1)
           
-          rem 5. 验证 Git 是否可用
-          git --version || (echo "❌ Git 未安装或未加入环境变量" && exit 1)
+          rem 5. 验证文件是否存在
+          if exist "!TEST_FILE!" (
+            echo "✅ 验证成功：文件内容如下"
+            type "!TEST_FILE!"  # 输出文件内容确认写入成功
+          ) else (
+            echo "❌ 验证失败：文件未创建" && exit 1
+          )
           
-          echo "====== 基础命令执行完毕（D 盘操作验证通过）======"
+          echo "====== D 盘文件操作测试全部通过 ======"
+          exit
           EOF
