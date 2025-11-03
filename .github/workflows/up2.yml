@@ -8,7 +8,7 @@ jobs:
   pull-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装依赖（sshpass 用于密码登录）
+      - name: 安装依赖
         run: sudo apt-get install -y sshpass tree
 
       - name: 测试服务器连接
@@ -23,10 +23,10 @@ jobs:
             exit 1
           fi
 
-      - name: 生成部署脚本并执行
+      - name: 通过 SSH 执行部署脚本（直接传递内容）
         run: |
-          # 生成 Windows 部署脚本（保存为临时文件）
-          cat > deploy.cmd << 'EOF'
+          # 直接通过管道将脚本内容传递给 Windows 的 cmd.exe
+          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }} "cmd /c" << 'EOF'
           @echo off
           setlocal enabledelayedexpansion
           
@@ -74,6 +74,3 @@ jobs:
           type !LOG_FILE!
           endlocal
           EOF
-
-          # 通过 SSH 直接执行脚本（使用 sshpass 处理密码）
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }} "cmd /c 'C:\Windows\System32\cmd.exe /k < deploy.cmd'"
