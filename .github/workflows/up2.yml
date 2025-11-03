@@ -23,54 +23,25 @@ jobs:
             exit 1
           fi
 
-      - name: 通过 SSH 执行部署脚本（直接传递内容）
+      - name: 执行基础部署命令（简化版）
         run: |
-          # 直接通过管道将脚本内容传递给 Windows 的 cmd.exe
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }} "cmd /c" << 'EOF'
+          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }} << 'EOF'
           @echo off
-          setlocal enabledelayedexpansion
+          echo "====== 开始执行基础命令 ======"
           
-          rem 定义日志文件（带时间戳）
-          set LOG_FILE=d:/.codes/deploy_log_%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%.log
-          echo "部署日志已保存到：!LOG_FILE!"
+          rem 1. 验证目录是否可访问（使用 C 盘作为备选，避免 D 盘不存在）
+          if not exist "c:/codes" (
+            mkdir "c:/codes" && echo "✅ 创建 c:/codes 成功" || echo "❌ 创建 c:/codes 失败"
+          )
           
-          rem 执行部署步骤并写入日志
-          (
-            echo "====== 1. 创建目标目录 ======"
-            if not exist "d:/.codes" (
-              mkdir "d:/.codes" && echo ✅ 目录创建成功 || (echo ❌ 目录创建失败 && exit 1)
-            ) else (
-              echo ℹ️ 目录已存在
-            )
-            
-            echo "====== 2. 切换目录并验证 ======"
-            cd /d "d:/.codes" || (echo ❌ 切换失败，当前路径：!cd! && exit 1)
-            echo ℹ️ 当前目录：!cd!
-            echo ------------ 目录内容 ------------
-            dir
-            echo. > test.txt
-            if exist "test.txt" (echo ✅ 测试文件创建成功) else (echo ❌ 测试文件创建失败 && exit 1)
-            
-            echo "====== 3. 拉取/更新仓库 ======"
-            if exist "gaojian-ruancang" (
-              echo ℹ️ 仓库已存在，执行更新...
-              cd "gaojian-ruancang" && (git status || echo ❌ git status 失败) && git pull origin main || (echo ❌ git pull 失败，错误码：!errorlevel! && exit 1)
-            ) else (
-              echo ℹ️ 仓库不存在，执行克隆...
-              git clone https://gaojianstyle:${{ secrets.GITHUB_PAT }}@github.com/gaojianstyle/gaojian-ruancang.git || (echo ❌ git clone 失败，错误码：!errorlevel! && exit 1)
-            )
-            
-            echo "====== 4. 验证结果 ======"
-            if exist "gaojian-ruancang" (
-              echo ------------ 仓库结构 ------------
-              dir "gaojian-ruancang"
-            ) else (
-              echo ❌ 仓库不存在，部署失败 && exit 1
-            )
-            echo ✅ 部署完成！
-          ) > !LOG_FILE! 2>&1
+          rem 2. 切换到目标目录
+          cd /d "c:/codes" && echo "✅ 切换到 c:/codes，当前目录：%cd%" || echo "❌ 切换目录失败"
           
-          rem 输出日志到控制台
-          type !LOG_FILE!
-          endlocal
+          rem 3. 尝试创建测试文件
+          echo. > test.txt && echo "✅ 创建 test.txt 成功" || echo "❌ 创建 test.txt 失败"
+          
+          rem 4. 验证 Git 是否可用
+          git --version || echo "❌ Git 未安装或未加入环境变量"
+          
+          echo "====== 基础命令执行完毕 ======"
           EOF
