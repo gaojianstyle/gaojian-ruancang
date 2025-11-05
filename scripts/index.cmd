@@ -1,11 +1,9 @@
 @echo off
-rem 解决中文编码问题（设置为UTF-8）
+rem 第一步：先切换到UTF-8编码（必须在所有中文输出之前）
 chcp 65001 >nul
 
-rem 核心逻辑：切换到D盘并读取目录
-echo 切换到D盘 D: drive...
-rem 切换到D盘根目录
-D:  
-rem 读取目录内容（等效于Get-ChildItem）
-dir
-echo D：驱动器读取完成
+rem 核心逻辑：切换到D盘并读取目录（中文正常显示）
+echo 切换到D盘...
+D: 
+dir  
+echo D盘读取完成
