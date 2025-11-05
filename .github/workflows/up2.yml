@@ -20,11 +20,15 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          # 关键：使用CMD兼容语法（移除#注释，改用rem；路径格式适配）
           script: |
-            rem 创建临时目录（CMD语法）
+            rem 确保临时目录存在
             if not exist "C:\Temp" mkdir "C:\Temp"
-            rem 通过SSH传输脚本（注意：ssh-action的scp需用PowerShell语法）
-            powershell -Command "scp ./scripts/read_drive_d.ps1 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }}:C:/Temp/"
-            rem 执行PowerShell脚本
-            powershell -File C:\Temp\read_drive_d.ps1
+            
+            rem 直接通过SSH动作传输脚本（避免powershell scp的路径问题）
+            echo "传输read_drive_d.ps1到Windows服务器"
+            rem 使用ssh-action内置的文件传输功能（替代手动scp）
+            scp ./scripts/read_drive_d.ps1 C:\Temp\
+            
+            rem 执行PowerShell脚本并输出结果
+            echo "开始执行脚本读取D盘目录"
+            powershell -ExecutionPolicy Bypass -File "C:\Temp\read_drive_d.ps1"
