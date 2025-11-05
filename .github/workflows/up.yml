@@ -36,7 +36,7 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
           source: "scripts/"  # 上传本地scripts文件夹内的所有内容
-          target: "D:\\scripts\\"  # Windows路径用双反斜杠（YAML转义）
+          target: "D:\\"  # Windows路径用双反斜杠（YAML转义）
           strip_components: 0  # 保留文件结构
           rm: false
           debug: true
