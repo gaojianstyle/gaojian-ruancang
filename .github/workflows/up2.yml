@@ -1,82 +1,25 @@
-name: D盘文件创建验证工作流
+name: 读取Windows服务器D盘目录
+
 on:
+  # 可根据需要修改触发条件，例如push、手动触发等
+  workflow_dispatch:  # 手动触发
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
-  verify-drive-write:
-    runs-on: ubuntu-latest
+  read-directory:
+    runs-on: ubuntu-latest  # 使用Ubuntu runner作为控制端
+
     steps:
-      - name: 安装SSH依赖工具
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y sshpass  # 用于处理SSH密码登录
-
-      - name: 测试服务器SSH连接可用性
-        run: |
-          HOST="${{ secrets.WIN_IP }}"
-          PORT=22
-          echo "🔍 测试与服务器 $HOST:$PORT 的连接..."
-          if ssh-keyscan -p "$PORT" "$HOST" > /dev/null 2>&1; then
-            echo "✅ SSH连接测试通过"
-          else
-            echo "❌ SSH连接测试失败，请检查服务器IP、端口或SSH服务状态"
-            exit 1
-          fi
-
-      - name: 分步验证D盘文件创建（核心步骤）
-        run: |
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -tt -o StrictHostKeyChecking=no -p 22 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }} "cmd /c \"
-            @echo off
-            echo ====== 开始D盘文件创建验证 ====== &&
-            
-            echo 1. 检查D盘是否存在... &&
-            if exist D:\\ (
-              echo ✅ D盘存在
-            ) else (
-              echo ❌ 错误：D盘不存在，请检查服务器磁盘配置 &&
-              exit 1
-            ) &&
-            
-            echo 2. 切换到D盘根目录... &&
-            cd /d D: &&
-            echo ✅ 已切换到D盘，当前路径：%cd% || (
-              echo ❌ 错误：无法切换到D盘 &&
-              exit 1
-            ) &&
-            
-            echo 3. 检查目标目录 .codes 是否存在... &&
-            if exist .codes (
-              echo ✅ 目录 D:\.codes 已存在
-            ) else (
-              echo ❌ 错误：未找到 D:\.codes 目录（请确认目录存在） &&
-              exit 1
-            ) &&
-            
-            echo 4. 进入 .codes 目录... &&
-            cd .codes &&
-            echo ✅ 已进入目录，当前路径：%cd% || (
-              echo ❌ 错误：无法进入 D:\.codes 目录 &&
-              exit 1
-            ) &&
-            
-            echo 5. 创建测试文件... &&
-            set TIMESTAMP=%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2% &&
-            set TEST_FILE=test_%TIMESTAMP%.txt &&
-            echo 测试内容：%date% %time% > !TEST_FILE! &&
-            echo ℹ️ 尝试创建文件：!TEST_FILE! &&
-            
-            echo 6. 验证文件是否创建成功... &&
-            if exist !TEST_FILE! (
-              echo ✅ 文件创建成功！路径：D:\.codes\!TEST_FILE! &&
-              echo 📄 文件内容： &&
-              type !TEST_FILE!
-            ) else (
-              echo ❌ 错误：文件未创建（可能原因：权限不足/安全软件拦截） &&
-              exit 1
-            ) &&
-            
-            echo ====== 所有验证步骤完成 ====== &&
-            exit
-          \""
+      - name: 连接Windows服务器并读取D盘目录
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.WIN_IP }}  # Windows服务器IP
+          username: ${{ secrets.SERVER_USERNAME }}  # 登录用户名
+          password: ${{ secrets.SERVER_PASSWORD }}  # 登录密码
+          port: 22  # 默认SSH端口（如果修改过需对应调整）
+          # Windows系统需要通过PowerShell执行命令
+          script: |
+            Write-Host "开始读取D盘根目录..."
+            Get-ChildItem -Path D:\
+            Write-Host "D盘目录读取完成"
