@@ -51,5 +51,5 @@ jobs:
           port: 22
           # 脚本实际路径：上传到了D:\scripts，所以路径是D:\scripts\read_drive_d.ps1
           script: |
-            powershell -ExecutionPolicy Bypass -File "D:\scripts\read_drive_d.ps1"
+            powershell -ExecutionPolicy Bypass -File "D:\scripts\index.ps1"
           debug: true
