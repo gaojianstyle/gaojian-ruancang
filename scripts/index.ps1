@@ -1,31 +1,13 @@
-# 全面解决中文编码问题（增强版）
-# 设置PowerShell输出编码
+﻿# 关键原理：
+# PowerShell（尤其是 Windows PowerShell 5.1）对脚本编码非常敏感：
+# 包含中文的脚本必须用 UTF-8 with BOM 编码（无 BOM 的 UTF-8 会被当作系统默认 ANSI 编码解析，导致乱码）；
+# 乱码会破坏字符串的语法（比如单引号 ' 被解析为其他字符），直接导致「缺少终止符」等语法错误。
+# 保存为 test.ps1，编码设为 UTF-8 with BOM
 $OutputEncoding = [System.Text.Encoding]::UTF8
-
-# 设置控制台输入输出编码
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-[Console]::InputEncoding = [System.Text.Encoding]::UTF8
-
-# 设置系统活动代码页为UTF-8
-chcp 65001 | Out-Null
-
-# 显式设置PowerShell的默认编码首选项
-[System.Text.Encoding]::Default = [System.Text.Encoding]::UTF8
-
-# 核心逻辑：先切换到D盘，然后读取目录
-Write-Host "切换到D盘 D: drive..."
-Set-Location -Path D:\
-Get-ChildItem
-Write-Host "D：驱动器读取完成~~"
-Write-Host "切换到C盘 ..."
-Set-Location -Path C:\
-Get-ChildItem
-Write-Host "C：驱动器读取完成~~"
-
-
-
-
-
-
-
-
+chcp 65001 | Out-Null  # 加 | Out-Null 隐藏 chcp 的输出信息
+Write-Host '开始...'
+cd D:\
+# Get-ChildItem -Path D:\
+dir
+Write-Host '完成'
