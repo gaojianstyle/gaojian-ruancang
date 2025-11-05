@@ -1,22 +1,22 @@
 name: 读取Windows服务器D盘目录
 
 on:
-  workflow_dispatch:  # 保留手动触发选项
+  workflow_dispatch:
   push:
-    branches: [ main ]  # 代码推送到main分支时自动触发
+    branches: [ main ]
 
 jobs:
   read-directory:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 连接Windows服务器并读取D盘目录（支持中文）
+      - name: 连接Windows服务器并读取D盘目录（修复中文乱码）
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.WIN_IP }}
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          # 强制设置PowerShell编码为UTF-8，解决中文乱码
+          # 关键：同时设置控制台编码和输出编码
           script: |
-            powershell -Command "$OutputEncoding = [System.Text.Encoding]::UTF8; Write-Host '开始读取D盘根目录...'; Get-ChildItem -Path D:\; Write-Host 'D盘目录读取完成'"
+            powershell -Command "$OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001; Write-Host '开始读取D盘根目录...'; Get-ChildItem -Path D:\; Write-Host 'D盘目录读取完成'"
