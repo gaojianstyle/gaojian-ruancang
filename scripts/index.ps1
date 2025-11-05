@@ -8,3 +8,15 @@ Write-Host "切换到D盘 D: drive..."
 Set-Location -Path D:\
 Get-ChildItem
 Write-Host "D：驱动器读取完成~~"
+Write-Host "切换到C盘 ..."
+Set-Location -Path C:\
+Get-ChildItem
+Write-Host "c：驱动器读取完成~~"
+
+
+
+
+
+
+
+
