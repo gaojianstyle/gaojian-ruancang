@@ -13,7 +13,7 @@ jobs:
       - name: 拉取代码仓库
         uses: actions/checkout@v4
 
-      - name: 执行D盘目录读取脚本
+      - name: 执行D盘目录读取脚本（D盘操作版）
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.WIN_IP }}
@@ -21,14 +21,11 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
           script: |
-            rem 确保临时目录存在
-            if not exist "C:\Temp" mkdir "C:\Temp"
+            rem 在D盘创建临时目录（避免C盘权限问题）
+            if not exist "D:\scripts_temp" mkdir "D:\scripts_temp"
             
-            rem 直接通过SSH动作传输脚本（避免powershell scp的路径问题）
-            echo "传输read_drive_d.ps1到Windows服务器"
-            rem 使用ssh-action内置的文件传输功能（替代手动scp）
-            scp ./scripts/read_drive_d.ps1 C:\Temp\
+            rem 传输脚本到D盘临时目录
+            powershell -Command "scp -o StrictHostKeyChecking=no ./scripts/read_drive_d.ps1 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }}:D:/scripts_temp/"
             
-            rem 执行PowerShell脚本并输出结果
-            echo "开始执行脚本读取D盘目录"
-            powershell -ExecutionPolicy Bypass -File "C:\Temp\read_drive_d.ps1"
+            rem 执行D盘上的脚本（显式绕过执行策略）
+            powershell -ExecutionPolicy Bypass -File "D:\scripts_temp\read_drive_d.ps1"
