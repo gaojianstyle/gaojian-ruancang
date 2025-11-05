@@ -10,11 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 步骤1：拉取代码仓库（包含scripts目录下的脚本）
       - name: 拉取代码仓库
         uses: actions/checkout@v4
 
-      # 步骤2：通过SSH将脚本传到Windows服务器，并执行
       - name: 执行D盘目录读取脚本
         uses: appleboy/ssh-action@master
         with:
@@ -22,11 +20,11 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          # 关键：通过SSH传输本地脚本到Windows临时目录，然后执行
+          # 关键：使用CMD兼容语法（移除#注释，改用rem；路径格式适配）
           script: |
-            # 将仓库中的scripts/read_drive_d.ps1传到Windows的C:\Temp目录（确保Temp目录存在）
-            mkdir -p C:\Temp
-            # 从GitHub Runner本地复制脚本到Windows服务器（利用ssh-action的文件传输能力）
-            scp ./scripts/read_drive_d.ps1 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }}:C:/Temp/
-            # 执行Windows上的PowerShell脚本
+            rem 创建临时目录（CMD语法）
+            if not exist "C:\Temp" mkdir "C:\Temp"
+            rem 通过SSH传输脚本（注意：ssh-action的scp需用PowerShell语法）
+            powershell -Command "scp ./scripts/read_drive_d.ps1 ${{ secrets.SERVER_USERNAME }}@${{ secrets.WIN_IP }}:C:/Temp/"
+            rem 执行PowerShell脚本
             powershell -File C:\Temp\read_drive_d.ps1
