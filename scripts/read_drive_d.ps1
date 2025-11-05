@@ -4,7 +4,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 chcp 65001 | Out-Null
 
 # 核心逻辑：先切换到D盘，然后读取目录
-Write-Host "Start reading D: drive..."
+Write-Host "切换到D盘 D: drive..."
 Set-Location -Path D:\
 Get-ChildItem
-Write-Host "D: drive reading completed"
+Write-Host "D：驱动器读取完成~~"

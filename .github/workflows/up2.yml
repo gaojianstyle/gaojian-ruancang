@@ -1,40 +1,59 @@
+# 工作流名称：读取Windows服务器D盘目录
 name: 读取Windows服务器D盘目录
 
+# 触发条件：手动触发(workflow_dispatch)和main分支推送(push)
 on:
+  # 允许手动触发工作流
   workflow_dispatch:
+  # 当代码推送到main分支时自动触发
   push:
     branches: [ main ]
 
-
+# 定义作业：read-directory
 jobs:
   read-directory:
+    # 指定运行环境为最新版Ubuntu
     runs-on: ubuntu-latest
 
-
+    # 定义工作流步骤
     steps:
+      # 步骤1：检出代码到GitHub Actions运行器
       - name: 检出代码
         uses: actions/checkout@v3
 
-      - name: 上传PowerShell脚本到Windows服务器
+      # 步骤2：上传文件夹到Windows服务器
+      - name: 上传文件夹到Windows服务器
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.WIN_IP }}
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          source: "scripts/read_drive_d.ps1"
-          target: "D:/"
-          strip_components: 1
-          # 确保目标目录存在
-          rm: false
-          debug: true
+          # 先创建目标目录（如果不存在）
+          script: |
+            cmd /c "if not exist D:\scripts mkdir D:\scripts"
+          # 本地源路径：指定要上传的文件夹（结尾加/表示上传文件夹内所有内容）
+          # 若要上传整个文件夹（包括文件夹本身），则去掉结尾的/，即 source: "scripts"
+          source: "scripts/"  # 上传scripts文件夹内的所有内容（包括子文件/子目录）
+          # 目标服务器路径：文件夹将被上传到D:/scripts/下
+          target: "D:/scripts/"
+          # 移除源路径的前缀层级（可选，根据需要调整）
+          # 例如：若source是"scripts/sub/"，strip_components: 1 会去掉"scripts/"前缀，直接上传sub内的内容
+          strip_components: 0  # 0表示保留完整路径结构，1表示移除最外层目录
+          rm: false  # 不上传前删除目标目录
+          debug: true  # 显示详细上传日志
 
+      # 步骤3：连接Windows服务器并执行上传的脚本文件
       - name: 连接Windows服务器并执行上传的脚本文件
         uses: appleboy/ssh-action@master
         with:
+          # 服务器主机地址，从GitHub密钥中获取
           host: ${{ secrets.WIN_IP }}
+          # 服务器用户名，从GitHub密钥中获取
           username: ${{ secrets.SERVER_USERNAME }}
+          # 服务器密码，从GitHub密钥中获取
           password: ${{ secrets.SERVER_PASSWORD }}
+          # SSH端口，默认为22
           port: 22
           # 执行上传到服务器的PowerShell脚本文件
           script: |
