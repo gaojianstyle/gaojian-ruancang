@@ -8,7 +8,7 @@ on:
     branches: [ main ]
 
 jobs:
-  read-directory:
+  win-up:
     runs-on: ubuntu-latest
     steps:
       # 步骤1：检出代码到GitHub Actions运行器
