@@ -1,25 +1,22 @@
 name: 读取Windows服务器D盘目录
 
 on:
-  # 可根据需要修改触发条件，例如push、手动触发等
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:  # 保留手动触发选项
   push:
-    branches: [ main ]
+    branches: [ main ]  # 当代码推送到main分支时自动触发
 
 jobs:
   read-directory:
-    runs-on: ubuntu-latest  # 使用Ubuntu runner作为控制端
+    runs-on: ubuntu-latest
 
     steps:
       - name: 连接Windows服务器并读取D盘目录
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.WIN_IP }}  # Windows服务器IP
-          username: ${{ secrets.SERVER_USERNAME }}  # 登录用户名
-          password: ${{ secrets.SERVER_PASSWORD }}  # 登录密码
-          port: 22  # 默认SSH端口（如果修改过需对应调整）
-          # Windows系统需要通过PowerShell执行命令
+          host: ${{ secrets.WIN_IP }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          # 修复命令执行方式：强制使用PowerShell
           script: |
-            Write-Host "开始读取D盘根目录..."
-            Get-ChildItem -Path D:\
-            Write-Host "D盘目录读取完成"
+            powershell -Command "Write-Host '开始读取D盘根目录...'; Get-ChildItem -Path D:\; Write-Host 'D盘目录读取完成'"
