@@ -14,24 +14,28 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v3
-        
-      - name: 读取仓库中的PowerShell脚本内容
-        id: script_content
-        run: |
-          # 读取脚本内容并转义特殊字符
-          SCRIPT=$(cat "${{ github.workspace }}/scripts/read_drive_d.ps1")
-          # 转义引号和换行符以便在PowerShell命令中使用
-          SCRIPT=$(echo "$SCRIPT" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-          echo "::set-output name=content::$SCRIPT"
 
-      - name: 连接Windows服务器并执行仓库中的脚本
+      - name: 上传PowerShell脚本到Windows服务器
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.WIN_IP }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          source: "scripts/read_drive_d.ps1"
+          target: "C:/Temp/"
+          strip_components: 1
+          # 确保目标目录存在
+          rm: false
+          debug: true
+
+      - name: 连接Windows服务器并执行上传的脚本文件
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.WIN_IP }}
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          # 执行代码仓库中的scripts/read_drive_d.ps1脚本内容
+          # 执行上传到服务器的PowerShell脚本文件
           script: |
-            # 将仓库中的脚本内容通过PowerShell命令执行
-            powershell -ExecutionPolicy Bypass -Command "${{ steps.script_content.outputs.content }}"
+            powershell -ExecutionPolicy Bypass -File "C:/Temp/read_drive_d.ps1"
