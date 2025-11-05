@@ -23,7 +23,7 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
           source: "scripts/read_drive_d.ps1"
-          target: "C:/Temp/"
+          target: "D:/"
           strip_components: 1
           # 确保目标目录存在
           rm: false
@@ -38,4 +38,4 @@ jobs:
           port: 22
           # 执行上传到服务器的PowerShell脚本文件
           script: |
-            powershell -ExecutionPolicy Bypass -File "C:/Temp/read_drive_d.ps1"
+            powershell -ExecutionPolicy Bypass -File "D:/read_drive_d.ps1"
