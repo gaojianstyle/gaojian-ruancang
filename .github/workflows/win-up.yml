@@ -53,40 +53,49 @@ jobs:
           script: |
             powershell -ExecutionPolicy Bypass -File "D:\scripts\index.ps1"
           debug: true
-          
-      # 步骤5：在Ubuntu环境中配置本地邮件服务器并直接发送邮件
-      - name: 部署本地邮件服务器并直接发送通知邮件
+      
+      - name: 部署本地邮件服务器并发送通知邮件
         if: success()
         run: |
-          # 安装本地邮件服务器和工具
+          # 安装依赖（确保组件完整）
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postfix mailutils
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postfix mailutils libsasl2-modules
           
-          # 配置Postfix为本地邮件服务器（直接发送模式）
-          # 设置主机名为github-actions.local
-          sudo hostname github-actions.local
-          sudo postconf -e 'myhostname = github-actions.local'
-          sudo postconf -e 'mydestination = $myhostname, localhost.localdomain, localhost'
-          sudo postconf -e 'mynetworks = 127.0.0.0/8'
-          sudo postconf -e 'relayhost = '
-          sudo postconf -e 'inet_interfaces = loopback-only'
+          # 核心配置优化（适配公共邮箱接收规则）
+          sudo hostname github-actions-runner  # 使用更规范的主机名
+          sudo postconf -e 'myhostname = github-actions-runner'  # 避免.local等非公共域名
+          sudo postconf -e 'mydestination = $myhostname, localhost'  # 精简本地目标域
+          sudo postconf -e 'mynetworks = 127.0.0.0/8'  # 仅允许本地发送
+          sudo postconf -e 'relayhost ='  # 不使用中继（不依赖第三方）
+          sudo postconf -e 'inet_interfaces = loopback-only'  # 仅监听本地接口（安全）
+          sudo postconf -e 'myorigin = $myhostname'  # 发件人域名与主机名一致
+          sudo postconf -e 'inet_protocols = ipv4'  # 避免IPv6可能的兼容问题
+          sudo postconf -e 'smtp_tls_security_level = may'  # 允许TLS加密传输（提高可信度）
+          sudo postconf -e 'smtp_header_checks = regexp:/etc/postfix/header_checks'  # 清理可能被标记的头信息
           
-          # 重启Postfix服务
+          # 清理敏感头信息（避免被识别为垃圾邮件）
+          echo '!/^From:/ REPLACE From: GitHub Actions <action@github-actions-runner>' | sudo tee /etc/postfix/header_checks
+          sudo postmap /etc/postfix/header_checks  # 生效头信息规则
+          
+          # 重启服务并验证状态
           sudo systemctl restart postfix
+          sudo systemctl status postfix --no-pager  # 输出状态便于调试
           
-          # 准备邮件内容
+          # 准备邮件内容（规范格式）
           MAIL_TO="gaojianstyle@163.com"
           MAIL_SUBJECT="Windows服务器D盘目录读取完成"
-          MAIL_BODY="GitHub Actions 工作流已成功执行，PowerShell脚本已在Windows服务器上运行完成。"
+          MAIL_BODY=$(cat <<EOF
+          GitHub Actions 工作流已成功执行！
+          执行时间: $(date +"%Y-%m-%d %H:%M:%S")
+          运行环境: $(hostname)
+          任务状态: 成功
+          EOF
+          )
           
-          # 创建临时邮件文件
-          echo "Subject: $MAIL_SUBJECT" > /tmp/email.txt
-          echo "From: github-actions@github-actions.local" >> /tmp/email.txt
-          echo "To: $MAIL_TO" >> /tmp/email.txt
-          echo "" >> /tmp/email.txt
-          echo "$MAIL_BODY" >> /tmp/email.txt
+          # 发送邮件（指定发件人，增加可读性）
+          echo "$MAIL_BODY" | mail -s "$MAIL_SUBJECT" -r "action@github-actions-runner" "$MAIL_TO"
           
-          # 使用sendmail直接发送邮件（不依赖外部SMTP服务器）
-          cat /tmp/email.txt | sudo sendmail -t
-          
-          echo "邮件已通过本地邮件服务器直接发送"
+          # 查看发送日志（关键调试信息）
+          sudo tail -n 20 /var/log/mail.log  # 输出邮件发送日志，确认是否成功发出
+                
+            
