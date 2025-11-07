@@ -53,3 +53,40 @@ jobs:
           script: |
             powershell -ExecutionPolicy Bypass -File "D:\scripts\index.ps1"
           debug: true
+          
+      # 步骤5：在Ubuntu环境中配置本地邮件服务器并直接发送邮件
+      - name: 部署本地邮件服务器并直接发送通知邮件
+        if: success()
+        run: |
+          # 安装本地邮件服务器和工具
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postfix mailutils
+          
+          # 配置Postfix为本地邮件服务器（直接发送模式）
+          # 设置主机名为github-actions.local
+          sudo hostname github-actions.local
+          sudo postconf -e 'myhostname = github-actions.local'
+          sudo postconf -e 'mydestination = $myhostname, localhost.localdomain, localhost'
+          sudo postconf -e 'mynetworks = 127.0.0.0/8'
+          sudo postconf -e 'relayhost = '
+          sudo postconf -e 'inet_interfaces = loopback-only'
+          
+          # 重启Postfix服务
+          sudo systemctl restart postfix
+          
+          # 准备邮件内容
+          MAIL_TO="gaojianstyle@163.com"
+          MAIL_SUBJECT="Windows服务器D盘目录读取完成"
+          MAIL_BODY="GitHub Actions 工作流已成功执行，PowerShell脚本已在Windows服务器上运行完成。"
+          
+          # 创建临时邮件文件
+          echo "Subject: $MAIL_SUBJECT" > /tmp/email.txt
+          echo "From: github-actions@github-actions.local" >> /tmp/email.txt
+          echo "To: $MAIL_TO" >> /tmp/email.txt
+          echo "" >> /tmp/email.txt
+          echo "$MAIL_BODY" >> /tmp/email.txt
+          
+          # 使用sendmail直接发送邮件（不依赖外部SMTP服务器）
+          cat /tmp/email.txt | sudo sendmail -t
+          
+          echo "邮件已通过本地邮件服务器直接发送"
