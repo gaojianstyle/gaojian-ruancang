@@ -54,60 +54,7 @@ jobs:
             powershell -ExecutionPolicy Bypass -File "D:\scripts\index.ps1"
           debug: true
       
-      # 假设这是你的完整GitHub Actions工作流文件（比如 .github/workflows/win-up.yml）
-name: Windows服务器D盘目录读取+邮件通知
-on:
-  # 可根据你的需求调整触发条件（比如手动触发、定时触发、代码推送触发）
-  workflow_dispatch:  # 手动触发（推荐测试用）
-  # schedule:  # 定时触发（示例：每天凌晨2点执行）
-  #   - cron: '0 2 * * *'
-
-jobs:
-  win-up:
-    runs-on: ubuntu-latest
-    steps:
-      # 第一步：拉取仓库代码（保持你原来的配置）
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          repository: gaojianstyle/gaojian-ruancang
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      # 第二步：SSH连接Windows服务器，创建scripts目录（保持你原来的配置）
-      - name: Create scripts directory on Windows server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.WIN_SSH_HOST }}  # 你的Windows服务器IP（已存Secret）
-          username: ${{ secrets.WIN_SSH_USER }}  # Windows服务器用户名（已存Secret）
-          password: ${{ secrets.WIN_SSH_PWD }}  # Windows服务器密码（已存Secret）
-          port: 22
-          script: cmd /c "if not exist D:\scripts mkdir D:\scripts"
-          debug: true
-
-      # 第三步：SCP上传scripts目录到Windows服务器（保持你原来的配置）
-      - name: Upload scripts to Windows server
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.WIN_SSH_HOST }}
-          username: ${{ secrets.WIN_SSH_USER }}
-          password: ${{ secrets.WIN_SSH_PWD }}
-          port: 22
-          source: scripts/
-          target: D:\
-          debug: true
-
-      # 第四步：SSH执行PowerShell脚本，读取D盘目录（保持你原来的配置）
-      - name: Run PowerShell script to read D drive
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.WIN_SSH_HOST }}
-          username: ${{ secrets.WIN_SSH_USER }}
-          password: ${{ secrets.WIN_SSH_PWD }}
-          port: 22
-          script: powershell -ExecutionPolicy Bypass -File "D:\scripts\index.ps1"
-          debug: true
-
-      # 第五步：用163 SMTP发送通知邮件（核心代码，已适配你的授权码）
+      # 第五步：用163 SMTP发送通知邮件（核心代码，添加到现有steps末尾）
       - name: Send email via 163 SMTP (100% delivery)
         if: success()
         run: |
