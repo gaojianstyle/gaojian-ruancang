@@ -55,69 +55,61 @@ jobs:
           debug: true
       
       # 第五步：用163 SMTP发送通知邮件（核心代码，添加到现有steps末尾）
-      - name: 修复163 SMTP发送（换端口+强制投递）
+      - name: 用Python+163授权码直连发送邮件（最终版）
         if: success()
         run: |
-          # 1. 安装依赖（保持不变）
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postfix mailutils libsasl2-modules
-          
-          # 2. 关键修复：换163 SSL端口465，适配Runner环境
-          sudo hostname github-actions-runner
-          sudo postconf -e 'myhostname = github-actions-runner'
-          sudo postconf -e 'mydestination = $myhostname, localhost'
-          sudo postconf -e 'mynetworks = 127.0.0.0/8'
-          sudo postconf -e 'inet_interfaces = loopback-only'
-          sudo postconf -e 'myorigin = github-actions-runner'
-          sudo postconf -e 'inet_protocols = ipv4'
-          
-          # 修复1：用163 SSL端口465（替代587，兼容性更好）
-          sudo postconf -e 'relayhost = [smtp.163.com]:465'
-          # 修复2：启用smtps协议（适配465端口的SSL加密）
-          sudo postconf -e 'smtp_use_tls = yes'
-          sudo postconf -e 'smtp_tls_security_level = ssl'
-          sudo postconf -e 'smtp_tls_protocols = TLSv1.2 TLSv1.3'
-          sudo postconf -e 'smtp_tls_ciphers = high'
-          # 修复3：SMTP认证配置（保持不变）
-          sudo postconf -e 'smtp_sasl_auth_enable = yes'
-          sudo postconf -e 'smtp_sasl_security_options = noanonymous'
-          sudo postconf -e 'smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd'
-          
-          # 3. 配置163账号（保持不变）
-          echo '[smtp.163.com]:465 gaojianstyle@163.com:${{ secrets.SMTP_AUTH_CODE }}' | sudo tee /etc/postfix/sasl_passwd
-          sudo postmap /etc/postfix/sasl_passwd
-          sudo chmod 600 /etc/postfix/sasl_passwd
-          sudo chmod 600 /etc/postfix/sasl_passwd.db
-          
-          # 4. 重启Postfix并强制重新加载配置
-          sudo systemctl restart postfix
-          sudo postfix reload  # 强制加载新配置
-          sudo systemctl status postfix --no-pager
-          
-          # 5. 准备邮件内容（保持不变）
-          MAIL_TO="gaojianstyle@163.com"
-          MAIL_SUBJECT="【GitHub Actions】Windows服务器D盘目录读取完成"
-          MAIL_BODY=$(cat <<EOF
-          尊敬的用户：
-          
+          # 无需额外安装依赖（GitHub Runner默认带Python3和smtplib）
+          python3 - <<EOF
+          import smtplib
+          import os
+          from email.mime.text import MIMEText
+          from email.header import Header
+
+          # 1. 配置信息（从GitHub Secrets读取，安全无泄露）
+          smtp_server = "smtp.163.com"
+          smtp_port = 465  # 163 SSL固定端口（必用，兼容性最好）
+          sender = "gaojianstyle@163.com"  # 发件人（必须和授权码对应）
+          password = os.getenv("SMTP_AUTH_CODE")  # 读取Secrets中的授权码
+          receiver = "gaojianstyle@163.com"  # 收件人
+
+          # 2. 构造邮件内容
+          subject = "【GitHub Actions】Windows服务器D盘目录读取完成"
+          body = """尊敬的用户： 
           以下是GitHub Actions工作流执行详情：
           - 执行时间：$(date +"%Y-%m-%d %H:%M:%S")
           - 运行环境：$(hostname)
           - 任务类型：Windows服务器D盘目录扫描
           - 执行结果：成功（已完整读取D盘所有目录/文件）
           - 操作说明：如需查看详细目录列表，可通过SSH登录Windows服务器查看D盘根目录
-          
-          此邮件由GitHub Actions自动发送，请勿回复。
+          此邮件由GitHub Actions自动发送，请勿回复。"""
+
+          # 3. 邮件格式处理
+          msg = MIMEText(body, "plain", "utf-8")
+          msg["From"] = Header(sender, "utf-8")  # 发件人名称
+          msg["To"] = Header(receiver, "utf-8")  # 收件人名称
+          msg["Subject"] = Header(subject, "utf-8")  # 邮件主题
+
+          try:
+              # 4. 直连163 SMTP服务器（SSL加密）
+              server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=10)
+              # 打印连接日志（方便排查）
+              print(f"✅ 成功连接163 SMTP服务器（{smtp_server}:{smtp_port}）")
+              
+              # 5. 授权码认证
+              server.login(sender, password)
+              print("✅ 授权码认证成功")
+              
+              # 6. 发送邮件
+              server.sendmail(sender, receiver, msg.as_string())
+              print("✅ 邮件发送成功！请查收163邮箱")
+              
+              # 7. 关闭连接
+              server.quit()
+          except Exception as e:
+              # 打印错误日志（关键排查信息）
+              print(f"❌ 邮件发送失败：{str(e)}")
+              raise  # 抛出错误，让工作流显示失败（方便排查）
           EOF
-          )
-          
-          # 6. 发送邮件+强制投递队列（关键：立即发送，不延迟）
-          echo "$MAIL_BODY" | mail -s "$MAIL_SUBJECT" -r "gaojianstyle@163.com" "$MAIL_TO" && echo "✅ 邮件已提交到发送队列" || echo "❌ 邮件提交失败"
-          sudo postfix flush  # 强制投递所有队列中的邮件
-          echo "✅ 已强制触发邮件投递"
-          
-          # 7. 输出详细通信日志（重点看163服务器响应）
-          echo -e "\n📋 163 SMTP通信日志（最后100行）："
-          sudo tail -n 100 /var/log/mail.log
-          echo -e "\n📋 队列状态："
-          sudo postqueue -p
+        env:
+          # 把GitHub Secrets中的授权码传入环境变量（Python读取）
+          SMTP_AUTH_CODE: ${{ secrets.SMTP_AUTH_CODE }}
