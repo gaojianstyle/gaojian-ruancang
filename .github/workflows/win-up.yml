@@ -15,27 +15,7 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v3
 
-      # 步骤2：强化本地文件检查（确保index.ps1存在，彻底避免空打包）
-      - name: 检查本地scripts目录及文件
-        run: |
-          echo "📋 查看当前工作目录：$(pwd)"
-          # 检查scripts目录是否存在
-          if [ ! -d "scripts" ]; then
-            echo "❌ 未找到scripts目录！请在仓库根目录创建scripts/"
-            exit 1
-          fi
-          # 检查index.ps1是否存在（核心文件必须有）
-          if [ ! -f "scripts/index.ps1" ]; then
-            echo "❌ scripts目录下未找到index.ps1！请放入核心脚本"
-            exit 1
-          fi
-          # 列出文件详情，确认存在
-          echo "✅ 确认文件存在："
-          ls -la scripts/index.ps1
-          echo "📋 scripts目录完整内容："
-          ls -la scripts/
-
-      # 步骤3：在Windows服务器创建目标目录
+      # 步骤2：先在Windows服务器创建目标目录
       - name: 创建D:\scripts目录
         uses: appleboy/ssh-action@master
         with:
@@ -46,21 +26,21 @@ jobs:
           script: cmd /c "if not exist D:\scripts mkdir D:\scripts"
           debug: true
 
-      # 步骤4：修复SCP source（明确打包目录内所有文件，避免空归档）
-      - name: 上传scripts目录下所有文件到Windows服务器
+      # 步骤3：上传scripts文件夹到Windows服务器
+      - name: 上传scripts文件夹到D:\scripts
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.WIN_IP }}
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          source: "scripts/*"  # 关键修复：明确打包scripts目录下的所有文件（而非目录本身）
-          target: "D:/scripts"  # 上传到Windows的D:\scripts目录（文件直接在该目录下）
-          strip_components: 0  # 保留文件原始结构（无冗余目录）
+          source: "scripts/"
+          target: "D:\\"
+          strip_components: 0
           rm: false
           debug: true
 
-      # 步骤5：执行PowerShell脚本（路径正确：D:\scripts\index.ps1）
+      # 步骤4：修复PowerShell命令（强制PowerShell环境执行，避免CMD冲突）
       - name: 执行脚本读取D盘目录（保存输出）
         uses: appleboy/ssh-action@master
         with:
@@ -69,11 +49,12 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
           debug: true
+          # 关键修复：用powershell -Command 包裹整个逻辑，确保Out-File生效
           script: |
-            powershell -Command "& { . 'D:\scripts\index.ps1' | Out-File -FilePath 'D:\scripts\output.txt' -Encoding utf8; if (Test-Path 'D:\scripts\output.txt') { Write-Host '✅ 输出已保存到D:\scripts\output.txt' } else { Write-Host '❌ 输出文件创建失败' } }"
+            powershell -Command "& { . 'D:\scripts\index.ps1' | Out-File -FilePath 'D:\scripts\output.txt' -Encoding utf8; if (Test-Path 'D:\scripts\output.txt') { Write-Host '✅ PowerShell输出已保存到D:\scripts\output.txt' } else { Write-Host '❌ 输出文件创建失败' } }"
 
-      # 步骤6：下载扫描结果文件
-      - name: 下载D盘扫描结果
+      # 步骤5：下载远程输出文件到GitHub Runner
+      - name: 下载D盘扫描结果文件
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.WIN_IP }}
@@ -85,8 +66,8 @@ jobs:
           direction: download
           debug: true
 
-      # 步骤7：发送包含扫描结果的邮件
-      - name: 用Python+163授权码发送邮件（含详情）
+      # 步骤6：发送包含扫描结果的邮件
+      - name: 用Python+163授权码发送邮件（含扫描结果）
         env:
           SMTP_AUTH_CODE: ${{ secrets.SMTP_AUTH_CODE }}
           EMAIL: ${{ secrets.EMAIL }}
@@ -101,24 +82,29 @@ jobs:
           from email.mime.text import MIMEText
           from email.header import Header
 
+          # 1. 读取环境变量配置
           smtp_server = "smtp.163.com"
           smtp_port = 465
           sender = os.getenv("EMAIL")
           password = os.getenv("SMTP_AUTH_CODE")
           receiver = os.getenv("TO_EMAIL")
 
+          # 2. 获取动态信息（Python原生方法，避免语法冲突）
           current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
           hostname = socket.gethostname()
 
+          # 3. 读取扫描结果文件（output.txt）
           try:
               with open("./output.txt", "r", encoding="utf-8") as f:
                   scan_result = f.read().strip()
-              scan_result = scan_result if scan_result else "⚠️ 未获取到有效目录扫描结果"
+              if not scan_result:
+                  scan_result = "⚠️ 未获取到有效目录扫描结果"
           except FileNotFoundError:
               scan_result = "⚠️ 扫描结果文件下载失败（未找到output.txt）"
           except Exception as e:
               scan_result = f"⚠️ 读取扫描结果失败：{str(e)}"
 
+          # 4. 构造邮件内容（含扫描结果）
           subject = "【GitHub Actions】Windows服务器D盘目录读取完成（含详情）"
           body = f"""尊敬的用户：
 
@@ -132,24 +118,26 @@ jobs:
           {scan_result}
 
           操作说明：
-          1. 如需验证，可通过SSH登录Windows服务器查看D盘根目录
-          2. 扫描结果文件保存在服务器 D:\scripts\output.txt
+          1. 如需验证目录完整性，可通过SSH登录Windows服务器查看D盘根目录
+          2. 扫描结果文件已保存在服务器 D:\scripts\output.txt
           3. 此邮件为自动发送，请勿回复。"""
 
+          # 5. 邮件格式处理（确保中文无乱码）
           msg = MIMEText(body, "plain", "utf-8")
           msg["From"] = Header(sender, "utf-8")
           msg["To"] = Header(receiver, "utf-8")
           msg["Subject"] = Header(subject, "utf-8")
 
+          # 6. 发送邮件
           try:
               server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=10)
-              print(f"✅ 连接163 SMTP服务器成功")
+              print(f"✅ 成功连接163 SMTP服务器（{smtp_server}:{smtp_port}）")
               server.login(sender, password)
-              print("✅ 授权码认证成功")
+              print("✅ 163授权码认证成功")
               server.sendmail(sender, receiver, msg.as_string())
               print("✅ 邮件发送成功！请查收163邮箱")
               server.quit()
           except Exception as e:
               print(f"❌ 邮件发送失败：{str(e)}")
-              raise
+              raise  # 抛出错误便于排查
           EOF
