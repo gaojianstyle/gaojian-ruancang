@@ -15,7 +15,7 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v3
 
-      # 步骤2：先在Windows服务器创建目标目录
+      # 步骤2：先在Windows服务器创建目标目录（单独用ssh-action，支持script参数）
       - name: 创建D:\scripts目录
         uses: appleboy/ssh-action@master
         with:
@@ -23,10 +23,11 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
+          # Windows CMD命令：确保目录存在（用反斜杠\符合Windows格式）
           script: cmd /c "if not exist D:\scripts mkdir D:\scripts"
           debug: true
 
-      # 步骤3：上传scripts文件夹到Windows服务器
+      # 步骤3：上传scripts文件夹到Windows服务器（移除scp-action中的script参数）
       - name: 上传scripts文件夹到D:\scripts
         uses: appleboy/scp-action@master
         with:
@@ -34,110 +35,84 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          source: "scripts/"
-          target: "D:\\"
-          strip_components: 0
+          source: "scripts/"  # 上传本地scripts文件夹内的所有内容
+          target: "D:\\"  # Windows路径用双反斜杠（YAML转义）
+          strip_components: 0  # 保留文件结构
           rm: false
           debug: true
 
-      # 步骤4：修复PowerShell命令（强制PowerShell环境执行，避免CMD冲突）
-      - name: 执行脚本读取D盘目录（保存输出）
+      # 步骤4：执行上传的PowerShell脚本（修正路径，脚本在D:\scripts下）
+      - name: 执行PowerShell脚本读取D盘目录
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.WIN_IP }}
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          debug: true
-          # 关键修复：用powershell -Command 包裹整个逻辑，确保Out-File生效
+          # 脚本实际路径：上传到了D:\scripts，所以路径是D:\scripts\read_drive_d.ps1
           script: |
-            powershell -Command "& { . 'D:\scripts\index.ps1' | Out-File -FilePath 'D:\scripts\output.txt' -Encoding utf8; if (Test-Path 'D:\scripts\output.txt') { Write-Host '✅ PowerShell输出已保存到D:\scripts\output.txt' } else { Write-Host '❌ 输出文件创建失败' } }"
-
-      # 步骤5：下载远程输出文件到GitHub Runner
-      - name: 下载D盘扫描结果文件
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.WIN_IP }}
-          username: ${{ secrets.SERVER_USERNAME }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
-          source: "D:/scripts/output.txt"
-          target: "./"
-          direction: download
+            powershell -ExecutionPolicy Bypass -File "D:\scripts\index.ps1"
           debug: true
-
-      # 步骤6：发送包含扫描结果的邮件
-      - name: 用Python+163授权码发送邮件（含扫描结果）
+      
+      # 第五步：用163 SMTP发送通知邮件（核心代码，添加到现有steps末尾）
+      - name: 用Python+163授权码直连发送邮件（最终版）
         env:
+          # 把GitHub Secrets中的授权码传入环境变量（Python读取）
           SMTP_AUTH_CODE: ${{ secrets.SMTP_AUTH_CODE }}
           EMAIL: ${{ secrets.EMAIL }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
         if: success()
         run: |
+          # 无需额外安装依赖（GitHub Runner默认带Python3和smtplib）
           python3 - <<EOF
           import smtplib
           import os
-          import datetime
-          import socket
           from email.mime.text import MIMEText
           from email.header import Header
 
-          # 1. 读取环境变量配置
+          # 1. 配置信息（从GitHub Secrets读取，安全无泄露）
           smtp_server = "smtp.163.com"
-          smtp_port = 465
-          sender = os.getenv("EMAIL")
-          password = os.getenv("SMTP_AUTH_CODE")
-          receiver = os.getenv("TO_EMAIL")
+          smtp_port = 465  # 163 SSL固定端口（必用，兼容性最好）
+          sender = os.getenv("EMAIL")  # 发件人（必须和授权码对应） 
+          password = os.getenv("SMTP_AUTH_CODE")  # 读取Secrets中的授权码
+          receiver = os.getenv("TO_EMAIL")  # 收件人
 
-          # 2. 获取动态信息（Python原生方法，避免语法冲突）
-          current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-          hostname = socket.gethostname()
-
-          # 3. 读取扫描结果文件（output.txt）
-          try:
-              with open("./output.txt", "r", encoding="utf-8") as f:
-                  scan_result = f.read().strip()
-              if not scan_result:
-                  scan_result = "⚠️ 未获取到有效目录扫描结果"
-          except FileNotFoundError:
-              scan_result = "⚠️ 扫描结果文件下载失败（未找到output.txt）"
-          except Exception as e:
-              scan_result = f"⚠️ 读取扫描结果失败：{str(e)}"
-
-          # 4. 构造邮件内容（含扫描结果）
-          subject = "【GitHub Actions】Windows服务器D盘目录读取完成（含详情）"
-          body = f"""尊敬的用户：
-
+          # 2. 构造邮件内容
+          subject = "【GitHub Actions】Windows服务器D盘目录读取完成"
+          body = """尊敬的用户： 
           以下是GitHub Actions工作流执行详情：
-          - 执行时间：{current_time}
-          - 运行环境：{hostname}
+          - 执行时间：$(date +"%Y-%m-%d %H:%M:%S")
+          - 运行环境：$(hostname)
           - 任务类型：Windows服务器D盘目录扫描
-          - 执行结果：成功（已完整读取D盘目录）
+          - 执行结果：成功（已完整读取D盘所有目录/文件）
+          - 操作说明：如需查看详细目录列表，可通过SSH登录Windows服务器查看D盘根目录
+          此邮件由GitHub Actions自动发送，请勿回复。"""
 
-          【D盘目录扫描详细结果】
-          {scan_result}
-
-          操作说明：
-          1. 如需验证目录完整性，可通过SSH登录Windows服务器查看D盘根目录
-          2. 扫描结果文件已保存在服务器 D:\scripts\output.txt
-          3. 此邮件为自动发送，请勿回复。"""
-
-          # 5. 邮件格式处理（确保中文无乱码）
+          # 3. 邮件格式处理
           msg = MIMEText(body, "plain", "utf-8")
-          msg["From"] = Header(sender, "utf-8")
-          msg["To"] = Header(receiver, "utf-8")
-          msg["Subject"] = Header(subject, "utf-8")
+          msg["From"] = Header(sender, "utf-8")  # 发件人名称
+          msg["To"] = Header(receiver, "utf-8")  # 收件人名称
+          msg["Subject"] = Header(subject, "utf-8")  # 邮件主题
 
-          # 6. 发送邮件
           try:
+              # 4. 直连163 SMTP服务器（SSL加密）
               server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=10)
+              # 打印连接日志（方便排查）
               print(f"✅ 成功连接163 SMTP服务器（{smtp_server}:{smtp_port}）")
+              
+              # 5. 授权码认证
               server.login(sender, password)
-              print("✅ 163授权码认证成功")
+              print("✅ 授权码认证成功")
+              
+              # 6. 发送邮件
               server.sendmail(sender, receiver, msg.as_string())
               print("✅ 邮件发送成功！请查收163邮箱")
+              
+              # 7. 关闭连接
               server.quit()
           except Exception as e:
+              # 打印错误日志（关键排查信息）
               print(f"❌ 邮件发送失败：{str(e)}")
-              raise  # 抛出错误便于排查
+              raise  # 抛出错误，让工作流显示失败（方便排查）
           EOF
+        
