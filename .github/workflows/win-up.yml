@@ -15,26 +15,24 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v3
 
-      # 新增步骤：检查本地scripts目录（关键修复：避免空目录上传）
+      # 步骤2：检查本地scripts目录（避免空目录上传）
       - name: 检查本地scripts目录状态
         run: |
           echo "📋 查看当前工作目录：$(pwd)"
-          echo "📋 查看scripts目录是否存在："
           if [ -d "scripts" ]; then
             echo "✅ scripts目录存在"
             echo "📋 目录内容："
-            ls -la scripts/  # 列出目录内容，确认有文件（如index.ps1）
-            # 检查目录是否非空
+            ls -la scripts/
             if [ -z "$(ls -A scripts/)" ]; then
-              echo "❌ scripts目录为空！请确保本地仓库的scripts/下有index.ps1"
-              exit 1  # 直接退出，避免后续无效步骤
+              echo "❌ scripts目录为空！请放入index.ps1"
+              exit 1
             fi
           else
-            echo "❌ 未找到scripts目录！请在仓库根目录创建scripts/并放入index.ps1"
+            echo "❌ 未找到scripts目录！请创建并放入index.ps1"
             exit 1
           fi
 
-      # 步骤2：先在Windows服务器创建目标目录
+      # 步骤3：在Windows服务器创建目标目录
       - name: 创建D:\scripts目录
         uses: appleboy/ssh-action@master
         with:
@@ -45,7 +43,7 @@ jobs:
           script: cmd /c "if not exist D:\scripts mkdir D:\scripts"
           debug: true
 
-      # 步骤3：修复SCP上传配置（避免空归档）
+      # 步骤4：修复SCP上传（删除错误tar_exec，路径优化）
       - name: 上传scripts文件夹到Windows服务器
         uses: appleboy/scp-action@master
         with:
@@ -53,14 +51,14 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          source: "scripts"  # 修正：去掉末尾/，避免只传目录内空内容（打包整个scripts目录）
-          target: "D:/scripts"  # 修正：用正斜杠，Windows兼容且避免YAML转义
+          source: "scripts"  # 打包整个scripts目录（含index.ps1）
+          target: "D:/scripts"  # 上传到Windows的D:\scripts目录
           strip_components: 0
           rm: false
           debug: true
-          tar_exec: "tar -zcf"  # 显式指定tar命令，增强兼容性
+          # 关键：删除错误的tar_exec配置，用默认tar命令即可
 
-      # 步骤4：执行PowerShell脚本并保存输出（修复后）
+      # 步骤5：执行PowerShell脚本（修正路径，避免多一层scripts/）
       - name: 执行脚本读取D盘目录（保存输出）
         uses: appleboy/ssh-action@master
         with:
@@ -70,10 +68,11 @@ jobs:
           port: 22
           debug: true
           script: |
-            powershell -Command "& { . 'D:\scripts\scripts\index.ps1' | Out-File -FilePath 'D:\scripts\output.txt' -Encoding utf8; if (Test-Path 'D:\scripts\output.txt') { Write-Host '✅ 输出已保存到D:\scripts\output.txt' } else { Write-Host '❌ 输出文件创建失败' } }"
+            # 正确路径：D:\scripts\index.ps1（上传后直接在scripts目录下）
+            powershell -Command "& { . 'D:\scripts\index.ps1' | Out-File -FilePath 'D:\scripts\output.txt' -Encoding utf8; if (Test-Path 'D:\scripts\output.txt') { Write-Host '✅ 输出已保存到D:\scripts\output.txt' } else { Write-Host '❌ 输出文件创建失败' } }"
 
-      # 步骤5：下载远程输出文件到GitHub Runner
-      - name: 下载D盘扫描结果文件
+      # 步骤6：下载扫描结果文件
+      - name: 下载D盘扫描结果
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.WIN_IP }}
@@ -85,8 +84,8 @@ jobs:
           direction: download
           debug: true
 
-      # 步骤6：发送包含扫描结果的邮件
-      - name: 用Python+163授权码发送邮件（含扫描结果）
+      # 步骤7：发送包含扫描结果的邮件
+      - name: 用Python+163授权码发送邮件（含详情）
         env:
           SMTP_AUTH_CODE: ${{ secrets.SMTP_AUTH_CODE }}
           EMAIL: ${{ secrets.EMAIL }}
@@ -113,8 +112,7 @@ jobs:
           try:
               with open("./output.txt", "r", encoding="utf-8") as f:
                   scan_result = f.read().strip()
-              if not scan_result:
-                  scan_result = "⚠️ 未获取到有效目录扫描结果"
+              scan_result = scan_result if scan_result else "⚠️ 未获取到有效目录扫描结果"
           except FileNotFoundError:
               scan_result = "⚠️ 扫描结果文件下载失败（未找到output.txt）"
           except Exception as e:
@@ -133,8 +131,8 @@ jobs:
           {scan_result}
 
           操作说明：
-          1. 如需验证目录完整性，可通过SSH登录Windows服务器查看D盘根目录
-          2. 扫描结果文件已保存在服务器 D:\scripts\output.txt
+          1. 如需验证，可通过SSH登录Windows服务器查看D盘根目录
+          2. 扫描结果文件保存在服务器 D:\scripts\output.txt
           3. 此邮件为自动发送，请勿回复。"""
 
           msg = MIMEText(body, "plain", "utf-8")
@@ -144,9 +142,9 @@ jobs:
 
           try:
               server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=10)
-              print(f"✅ 成功连接163 SMTP服务器（{smtp_server}:{smtp_port}）")
+              print(f"✅ 连接163 SMTP服务器成功")
               server.login(sender, password)
-              print("✅ 163授权码认证成功")
+              print("✅ 授权码认证成功")
               server.sendmail(sender, receiver, msg.as_string())
               print("✅ 邮件发送成功！请查收163邮箱")
               server.quit()
