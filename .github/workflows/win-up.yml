@@ -40,7 +40,7 @@ jobs:
           rm: false
           debug: true
 
-      # 步骤4：执行PowerShell脚本并保存输出结果
+      # 步骤4：修复PowerShell命令（强制PowerShell环境执行，避免CMD冲突）
       - name: 执行脚本读取D盘目录（保存输出）
         uses: appleboy/ssh-action@master
         with:
@@ -49,9 +49,9 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
           debug: true
+          # 关键修复：用powershell -Command 包裹整个逻辑，确保Out-File生效
           script: |
-            powershell -ExecutionPolicy Bypass -File "D:\scripts\index.ps1" | Out-File -FilePath "D:\scripts\output.txt" -Encoding utf8
-            echo "PowerShell输出已保存到D:\scripts\output.txt"
+            powershell -Command "& { . 'D:\scripts\index.ps1' | Out-File -FilePath 'D:\scripts\output.txt' -Encoding utf8; if (Test-Path 'D:\scripts\output.txt') { Write-Host '✅ PowerShell输出已保存到D:\scripts\output.txt' } else { Write-Host '❌ 输出文件创建失败' } }"
 
       # 步骤5：下载远程输出文件到GitHub Runner
       - name: 下载D盘扫描结果文件
@@ -61,9 +61,9 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          source: "D:/scripts/output.txt"  # 正斜杠避免YAML转义问题
-          target: "./"  # 下载到Runner当前目录
-          direction: download  # 关键：指定为下载（默认是上传）
+          source: "D:/scripts/output.txt"
+          target: "./"
+          direction: download
           debug: true
 
       # 步骤6：发送包含扫描结果的邮件
@@ -106,8 +106,8 @@ jobs:
 
           # 4. 构造邮件内容（含扫描结果）
           subject = "【GitHub Actions】Windows服务器D盘目录读取完成（含详情）"
-          body = f"""
-          尊敬的用户：
+          body = f"""尊敬的用户：
+
           以下是GitHub Actions工作流执行详情：
           - 执行时间：{current_time}
           - 运行环境：{hostname}
@@ -120,8 +120,7 @@ jobs:
           操作说明：
           1. 如需验证目录完整性，可通过SSH登录Windows服务器查看D盘根目录
           2. 扫描结果文件已保存在服务器 D:\scripts\output.txt
-          3. 此邮件为自动发送，请勿回复。
-          """
+          3. 此邮件为自动发送，请勿回复。"""
 
           # 5. 邮件格式处理（确保中文无乱码）
           msg = MIMEText(body, "plain", "utf-8")
