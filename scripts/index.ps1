@@ -11,7 +11,7 @@ cd D:\
 # Get-ChildItem -Path D:\
 dir
 cd D:\.codes
-git clone https://github.com/gaojianstyle/gaojian-ruancang.git
-cd gaojian-ruancang
+# git clone https://github.com/gaojianstyle/gaojian-ruancang.git
+# cd gaojian-ruancang
 dir
 Write-Host '完成'
