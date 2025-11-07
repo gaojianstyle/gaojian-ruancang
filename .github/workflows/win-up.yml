@@ -1,5 +1,5 @@
 # 工作流名称：读取Windows服务器D盘目录
-name: 读取Windows服务器D盘目录
+name: win服务器
 
 # 触发条件：手动触发和main分支推送
 on:
