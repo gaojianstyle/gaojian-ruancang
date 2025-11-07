@@ -68,7 +68,7 @@ jobs:
           # 1. 配置信息（从GitHub Secrets读取，安全无泄露）
           smtp_server = "smtp.163.com"
           smtp_port = 465  # 163 SSL固定端口（必用，兼容性最好）
-          sender = "gaojianstyle@163.com"  # 发件人（必须和授权码对应）
+          sender = os.getenv("EMAIL")  # 发件人（必须和授权码对应） 
           password = os.getenv("SMTP_AUTH_CODE")  # 读取Secrets中的授权码
           receiver = "gaojianstyle@163.com"  # 收件人
 
