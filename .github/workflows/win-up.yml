@@ -15,22 +15,25 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v3
 
-      # 步骤2：检查本地scripts目录（避免空目录上传）
-      - name: 检查本地scripts目录状态
+      # 步骤2：强化本地文件检查（确保index.ps1存在，彻底避免空打包）
+      - name: 检查本地scripts目录及文件
         run: |
           echo "📋 查看当前工作目录：$(pwd)"
-          if [ -d "scripts" ]; then
-            echo "✅ scripts目录存在"
-            echo "📋 目录内容："
-            ls -la scripts/
-            if [ -z "$(ls -A scripts/)" ]; then
-              echo "❌ scripts目录为空！请放入index.ps1"
-              exit 1
-            fi
-          else
-            echo "❌ 未找到scripts目录！请创建并放入index.ps1"
+          # 检查scripts目录是否存在
+          if [ ! -d "scripts" ]; then
+            echo "❌ 未找到scripts目录！请在仓库根目录创建scripts/"
             exit 1
           fi
+          # 检查index.ps1是否存在（核心文件必须有）
+          if [ ! -f "scripts/index.ps1" ]; then
+            echo "❌ scripts目录下未找到index.ps1！请放入核心脚本"
+            exit 1
+          fi
+          # 列出文件详情，确认存在
+          echo "✅ 确认文件存在："
+          ls -la scripts/index.ps1
+          echo "📋 scripts目录完整内容："
+          ls -la scripts/
 
       # 步骤3：在Windows服务器创建目标目录
       - name: 创建D:\scripts目录
@@ -43,21 +46,21 @@ jobs:
           script: cmd /c "if not exist D:\scripts mkdir D:\scripts"
           debug: true
 
-      # 步骤4：上传scripts文件夹到Windows服务器
-      - name: 上传scripts文件夹到Windows服务器
+      # 步骤4：修复SCP source（明确打包目录内所有文件，避免空归档）
+      - name: 上传scripts目录下所有文件到Windows服务器
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.WIN_IP }}
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          source: "scripts"
-          target: "D:/scripts"
-          strip_components: 0
+          source: "scripts/*"  # 关键修复：明确打包scripts目录下的所有文件（而非目录本身）
+          target: "D:/scripts"  # 上传到Windows的D:\scripts目录（文件直接在该目录下）
+          strip_components: 0  # 保留文件原始结构（无冗余目录）
           rm: false
           debug: true
 
-      # 步骤5：执行PowerShell脚本（删除CMD不支持的#注释，修复报错）
+      # 步骤5：执行PowerShell脚本（路径正确：D:\scripts\index.ps1）
       - name: 执行脚本读取D盘目录（保存输出）
         uses: appleboy/ssh-action@master
         with:
@@ -66,7 +69,6 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
           debug: true
-          # 核心修复：删除#注释，CMD只执行有效命令
           script: |
             powershell -Command "& { . 'D:\scripts\index.ps1' | Out-File -FilePath 'D:\scripts\output.txt' -Encoding utf8; if (Test-Path 'D:\scripts\output.txt') { Write-Host '✅ 输出已保存到D:\scripts\output.txt' } else { Write-Host '❌ 输出文件创建失败' } }"
 
